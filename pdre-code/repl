@@ -1,0 +1,3 @@
+#!/bin/sh
+java -server -cp .:./classes:./lib/*:./* -XX:MaxPermSize=160m -XX:-DontCompileHugeMethods -Xmx256m -Xincgc -Xshare:off -Xbootclasspath/a:jline.ConsoleRunner -Xbootclasspath/a:clojure.main jline.ConsoleRunner clojure.main
+

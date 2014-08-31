@@ -43,15 +43,106 @@
 (defmethod is-accepting 'maybe [ re ] true)
 (defmethod is-error 'maybe [ [ _ re ] ] false)
 
-(defmethod deriv 'or [ [ _ & res ] x ]
-    (let [ r (filter #(not (is-error %))
-                (map #(deriv % x) res)) ]
-        (cond
-            (empty? r) '(error)
-            (empty? (rest r)) (first r)
-            true (cons 'or r))))
-(defmethod is-accepting 'or [ [ _ & res ] ]
-    (boolean (some is-accepting res)))
-(defmethod is-error 'or [ [ _ & res ] ]
-    (not (not-every? is-error res)))
+(defmethod deriv 'zero-or-more [ [ _ re ] x ]
+    (let [ re' (deriv re) ]
+        (if (is-error re')
+            '(error)
+            `(re-seq ~re' (zero-or-more ~re)))))
+(defmethod is-accepting 'zero-or-more [ _ ] true)
+(defmethod is-error 'zero-or-more [ _ ] false)
 
+(defn- make-or [ re1 re2 ]
+    (cond
+        (is-error re1) re2
+        (is-error re2) re1
+        true `(or ~re1 ~re2)))
+
+(defmethod deriv 're-seq [ [ _ re1 re2 ] x ]
+    (if (is-accepting re1)
+        (make-or
+            `(re-seq ~(deriv re1 x) ~re2)
+            (deriv re2 x))
+        (let [ re1' (deriv re1 x) ]
+            (if (is-error re1')
+                '(error)
+                `(re-seq ~re1 ~re2)))))
+(defmethod is-accepting 're-seq [ [ _ re1 re2 ] ]
+    (and (is-accepting re1) (is-accepting re2)))
+(defmethod is-error 're-seq [ [ _ re1 re2 ] ]
+    (or (is-error re1) (is-error re2)))
+
+(defmethod deriv 'or [ [ _ re1 re2 ] x ]
+    (make-or (deriv re1 x) (deriv re2 x)))
+(defmethod is-accepting 'or [ [ _ re1 re2 ] ]
+    (or (is-accepting re1) (is-accepting re2)))
+(defmethod is-error 'or [ [ _ re1 re2 ] ]
+    (and (is-error re1) (is-error re2)))
+
+(defmethod deriv 'and [ [ _ re1 re2 ] x ]
+    (let [  re1' (deriv re1 x)
+            re2' (deriv re2 x) ]
+        (if (or (is-error re1') (is-error re2'))
+            '(error)
+            `(and ~re1' ~re2'))))
+(defmethod is-accepting 'and [ [ _ re1 re2 ] ]
+    (and (is-accepting re1) (is-accepting re2)))
+(defmethod is-error 'and [ [ _ re1 re2 ] ]
+    (or (is-error re1) (is-error re2)))
+
+(defmethod deriv 'not [ [ _ re ] x ]
+    `(not (deriv re x))
+(defmethod is-accepting 'not [ [ _ re ] ]
+    (not (is-accepting re))
+(defmethod is-error 'not [ [ _ re ] ] false)
+
+(def ^:dynamic max-state nil)
+(def ^:dynamic state-to-idx nil)
+(def ^:dynamic idx-to-state nil)
+(def ^:dynamic accepting-states nil)
+
+(defn- make-state [ re' ]
+    (let [ idx' (swap! max-state inc) ]
+        (swap! state-to-idx assoc re' idx')
+        (swap! idx-to-state assoc idx' re')
+        idx'))
+
+(defn- make-trans [ re ]
+    (into-array Integer/TYPE
+        (for [ c (map char (range 0 127)) ]
+            (let [ re' (deriv re c) ]
+                (if (is-error re')
+                    -1
+                    (or
+                        (get @state-to-idx re')
+                        (make-state re')))))))
+
+(defn- make-states [ idx ]
+    (when (<= idx @max-state)
+        (let [  re (get @idx-to-state idx)
+                trans (make-trans re) ]
+            (when (is-accepting re)
+                (swap! accepting-states conj idx))
+            (cons trans (make-state (inc idx))))))
+
+(defn make-dfa [ re ]
+    (binding [  max-state (atom 0)
+                state-to-idx (atom { re 0 })
+                idx-to-state (atom { 0 re })
+                accepting-states (atom #{}) ]
+        (let [ table (into-array (make-states 0)) ]
+            [ table @accepting-states ])))
+
+(defn dfa-matches [ dfa s ]
+    (let [ [ table accpts ] dfa ]
+        (loop [ state 0 st s ]
+            (cond
+                (= state -1) false
+                (empty? st)
+                    (boolean (accpts state))
+                true
+                    (recur
+                        (aget (aget table state)
+                                (int (first st)))
+                        (rest st))))))
+                
+            
