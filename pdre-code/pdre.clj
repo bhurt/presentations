@@ -1,10 +1,5 @@
 (ns pdre)
 
-(defmulti deriv
- "Multimethod to calculate the derivative of a regular expression re
-  with respect to the character c."
-    (fn [ re c ] (first re)))
-
 (defmulti is-accepting
  "Multimethod- returns true if the given regular expression re is accepting."
     first)
@@ -12,6 +7,11 @@
 (defmulti is-error
  "Multimethod- returns true if the given regular expression re is an error."
     first)
+
+(defmulti deriv
+ "Multimethod to calculate the derivative of a regular expression re
+  with respect to the character c."
+    (fn [ re c ] (first re)))
 
 (defn re-matches-deriv
  "Returns true if s (a string or sequence of characters) matches the
@@ -23,76 +23,77 @@
             (empty? st) (is-accepting r)
             true (recur (deriv r (first st)) (rest st)))))
 
-(defmethod deriv 'error [ re c ] '(error))
 (defmethod is-accepting 'error [ re ] false)
 (defmethod is-error 'error [ re ] true)
+(defmethod deriv 'error [ re c ] '(error))
 
-(defmethod deriv 'accepting [ re c ] '(error))
 (defmethod is-accepting 'accepting [ re ] true)
 (defmethod is-error 'accepting [ re ] false)
+(defmethod deriv 'accepting [ re c ] '(error))
 
+(defmethod is-accepting 'char [ re ] false)
+(defmethod is-error 'char [ re ] false)
 (defmethod deriv 'char [ [ _ c ] x ]
     (if (= c x)
         '(accepting)
         '(error)))
-(defmethod is-accepting 'char [ re ] false)
-(defmethod is-error 'char [ re ] false)
 
-(defmethod deriv 'maybe [ [ _ re ] x ]
-    (deriv re x))
 (defmethod is-accepting 'maybe [ re ] true)
 (defmethod is-error 'maybe [ [ _ re ] ] false)
+(defmethod deriv 'maybe [ [ _ re ] x ]
+    (deriv re x))
 
+(defmethod is-accepting 'zero-or-more [ _ ] true)
+(defmethod is-error 'zero-or-more [ _ ] false)
 (defmethod deriv 'zero-or-more [ [ _ re ] x ]
     (let [ re' (deriv re) ]
         (if (is-error re')
             '(error)
             `(re-seq ~re' (zero-or-more ~re)))))
-(defmethod is-accepting 'zero-or-more [ _ ] true)
-(defmethod is-error 'zero-or-more [ _ ] false)
 
-(defn- make-or [ re1 re2 ]
+(defn- re-union [ re1 re2 ]
     (cond
         (is-error re1) re2
         (is-error re2) re1
         true `(or ~re1 ~re2)))
 
+(defmethod is-accepting 're-seq [ [ _ re1 re2 ] ]
+    (and (is-accepting re1) (is-accepting re2)))
+(defmethod is-error 're-seq [ [ _ re1 re2 ] ]
+    (or (is-error re1) (is-error re2)))
 (defmethod deriv 're-seq [ [ _ re1 re2 ] x ]
     (if (is-accepting re1)
-        (make-or
+        (re-union
             `(re-seq ~(deriv re1 x) ~re2)
             (deriv re2 x))
         (let [ re1' (deriv re1 x) ]
             (if (is-error re1')
                 '(error)
                 `(re-seq ~re1 ~re2)))))
-(defmethod is-accepting 're-seq [ [ _ re1 re2 ] ]
-    (and (is-accepting re1) (is-accepting re2)))
-(defmethod is-error 're-seq [ [ _ re1 re2 ] ]
-    (or (is-error re1) (is-error re2)))
 
-(defmethod deriv 'or [ [ _ re1 re2 ] x ]
-    (make-or (deriv re1 x) (deriv re2 x)))
 (defmethod is-accepting 'or [ [ _ re1 re2 ] ]
     (or (is-accepting re1) (is-accepting re2)))
 (defmethod is-error 'or [ [ _ re1 re2 ] ]
     (and (is-error re1) (is-error re2)))
+(defmethod deriv 'or [ [ _ re1 re2 ] x ]
+    (re-union (deriv re1 x) (deriv re2 x)))
 
-(defmethod deriv 'and [ [ _ re1 re2 ] x ]
-    (let [  re1' (deriv re1 x)
-            re2' (deriv re2 x) ]
-        (if (or (is-error re1') (is-error re2'))
-            '(error)
-            `(and ~re1' ~re2'))))
+(defn re-intersection [ re1 re2 ]
+    (if (or (is-error re1) (is-error re2))
+        '(error)
+        `(and ~re1 ~re2)))
+
 (defmethod is-accepting 'and [ [ _ re1 re2 ] ]
     (and (is-accepting re1) (is-accepting re2)))
 (defmethod is-error 'and [ [ _ re1 re2 ] ]
     (or (is-error re1) (is-error re2)))
+(defmethod deriv 'and [ [ _ re1 re2 ] x ]
+    (re-intersection (deriv re1 x) (deriv re2 x)))
 
 (defmethod deriv 'not [ [ _ re ] x ]
-    `(not (deriv re x))
+    `(not (deriv re x)))
 (defmethod is-accepting 'not [ [ _ re ] ]
-    (not (is-accepting re))
+    (not (is-accepting re)))
 (defmethod is-error 'not [ [ _ re ] ] false)
 
 (def ^:dynamic max-state nil)
@@ -144,5 +145,4 @@
                         (aget (aget table state)
                                 (int (first st)))
                         (rest st))))))
-                
-            
+
