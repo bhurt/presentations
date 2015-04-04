@@ -82,11 +82,17 @@ now we need to thread that information through the whole calling stack:</P>
 
 <P><DIV ALIGN="CENTER"><H2>The Reader Type</H2></DIV></P>
 
+<P>I start by introducing a type:</P>
+
 <P><CODE><PRE>
     type Reader s a = s -&gt; a
 </PRE></CODE></P>
 
-<P>So now we can clean up our types a little:</P>
+<P>Note that the <CODE>type</CODE> declaration is Haskell is just like
+the <CODE>typedef</CODE> declaration in C/C++.  All it does is introduce
+a type macro- I can always replace the type on the left with the type on
+the right.  Indeed, I often will, to show what's going on under the hood
+(so to speak).  So now we can clean up our types a little:</P>
 
 <P><CODE><PRE>
     f :: ... -&gt; Reader blah something
@@ -99,21 +105,60 @@ now we need to thread that information through the whole calling stack:</P>
     ...
 </PRE></CODE></P>
 
-<P>What we need is a special "reader let", which automatically appends the
-blah value.  This is hard.  But, if we have:</P>
+<P>Note: in Haskell, functions are first class, which means it makes
+perfect sense to return a function as a value.  Also, Haskell has
+partial function application- which means there is no difference between
+a function returning a function, and having the function just take that
+many more arguments.  In other words:</P>
 
 <P><CODE><PRE>
+    -- A function that takes two arguments and returns some value
+    f foo bar = ...
+</PRE></CODE></P>
+
+<P>and:</P>
+
+<P><CODE><PRE>
+    -- A function that takes one argument and returns a function
+    -- that takes one argument and returns some value
+    f foo = (\bar -&gt;  ...)
+</PRE></CODE></P>
+
+<P>are treate the same.  It's even OK to do:</P>
+
+<P><CODE><PRE>
+    -- A function that takes one argument, does some stuff, and then
+    -- returns a function that takes one argument and returns some value
+    f foo = 
+        ...
+        (\bar -&gt;  ...)
+</PRE></CODE></P>
+
+<P>These three different bits of code are all effectively
+equivalent.</P>
+
+<P>We've improved the situation, but not much.  What we need is a
+special "reader let", which automatically appends the blah value.  This
+is hard, as it requires help from the compiler.  We'll get back to that.
+However, there is something we can do now.  A little know stunt in
+functional programming is that if we have:</P>
+
+<P><CODE><PRE>
+    -- A let expression.
     let x = foo in bar
 </PRE></CODE></P>
 
-<P>this is the same as:</P>
+<P>we can replace it with:</P>
 
 <P><CODE><PRE>
+    -- a function expression applied to an argument.
     (\x -&gt; bar) foo
 </PRE></CODE></P>
 
-<P>So, instead of a special let, let's consider a special apply.  Flip the
-order of the args, so we can do:</P>
+<P>And the code behaves the same.  In fact, this is how let is defined
+in theory.  Apply is much easier than let to replace in code.  So,
+instead of a special let, let's do a special apply.  Flip the order of
+the args, so we can do:</P>
 
 <P><CODE><PRE>
     apply foo (\x -&gt; bar)
@@ -138,7 +183,7 @@ cut at the code:</P>
 
 <P><CODE><PRE>
 apply :: (Reader r a) -&gt; (a -&gt; b) -&gt; Reader r b
--- apply :: (r -&gt; a) -gt; (a -&gt; b) -&gt; r -&gt; b
+-- apply :: (r -&gt; a) -&gt; (a -&gt; b) -&gt; r -&gt; b
 apply f g s = g (f s)
 </PRE></CODE></P>
 
@@ -148,8 +193,8 @@ apply f g s = g (f s)
     fmap :: Functor f =&gt; (a -&gt; b) -&gt; f a -&gt; f b
 </PRE></CODE></P>
 
-<P>But problem: what happens if we want to call two functions and thread
-the variable into both?</P>
+<P>But there is a problem: what happens if we want to call two functions
+and thread the variable into both?</P>
 
 <P><CODE><PRE>
     f :: ... -&gt; Reader blah something
@@ -265,6 +310,12 @@ it (down in <CODE>h</CODE>).  If we had a function:</P>
 the loss of performance- we're introducing a lot of unnecessary closures
 and lambda expressions.  Rest assured, the ghc compiler optimizes all of
 this, and recovers code equalivalent to our original hand-threaded
+code.  The ghc compiler knows about the let/apply equivalence (so it's
+not so unknown as I lead you to believe), and will happily convert back
+from our apply the (more efficient) let representation.  Also, it knows
+about returning functions vr.s just taking more arguments, and will
+happily swap that back.  We can write our nice, generic code, and
+Haskell will apply the obvious transformations to turn it into efficient
 code.</P>
 
 <P><DIV ALIGN="CENTER"><H2>Motivating Example #2</H2></DIV></P>
@@ -295,16 +346,20 @@ updated blah (common with immutable data):
 <P><DIV ALIGN="CENTER"><H2>The State Type</H2></DIV></P>
 
 <P>We pull the same trick, just a little more complicated.  We
-define:</P>
+define (spelling out the types):</P>
 
 <P><CODE><PRE>
-    type State s a = s -&t; (a, s)
+    type State s a = s -&gt; (a, s)
 
     (&gt;&gt;=) :: State s a -&gt; (a -&gt; State s b) -&gt; State s b
     -- (&gt;&gt;=) :: (s -&gt; (a, s)) -&gt; (a -&gt; s -&gt; (b, s)) -&gt; s -&gt; (b, s)
-    f &gt;&gt;= g = \s -&gt;
-        let (x, s') = f s
-        g x s'
+    f &gt;&gt;= g = 
+        -- f :: State s a == s -&gt; (a, s)
+        -- g :: a -&gt; State s b == a -&gt; s -&gt; (b, s)
+        -- we want to produce a State s b == s -&gt; (b, s)
+        \s -&gt;
+            let (x, s') = f s
+            g x s'
 
     return :: a -&gt; State s a
     -- return :: a -&gt; s -&gt; (a, s)
@@ -359,7 +414,8 @@ types) of the <CODE>&gt;&gt;=</CODE> operator:</P>
     return :: a -&gt; State s a
 </PRE></CODE></P>
 
-<P>The solution is to introduce a type class:</P>
+<P>This causes Haskell to be unhappy.  The solution is to introduce a
+type class:</P>
 
 <P><CODE><PRE>
     class Monad m where
@@ -546,7 +602,7 @@ main = do
     putStrLn "What is your guess?"
     guess &lt;- getLine
     -- Now, this is the last statement in this do block
-    if (guess == 3) then
+    if ((read guess) == 3::Int) then
         -- Which contains two do blocks inside
         do
             putStrLn "Correct!"
@@ -562,7 +618,6 @@ explicitly thread the <CODE>World#</CODE> value around (i.e. desugar the
 do blocks, inline the definition of <CODE>&gt;&gt;=</CODE>).  How does
 the last call to main work?</P>
 
-<P><DIV ALIGN="CENTER"><H2>Designing with Monads</H2></DIV></P>
 <P><DIV ALIGN="CENTER"><H2>Monad Transformers</H2></DIV></P>
 
 <P>So, <CODE>IO</CODE> is "impure"- but a lot of the monads we've seen
@@ -583,5 +638,99 @@ we express that?</P>
 
 <P>This is the "State Transformer"- it stacks on top of another monad
 and threads a state variable through.</P>
+
+<P><B>HOMEWORK:</B> Write the transformer versions of ReaderT, WriterT,
+and MaybeT.</P>
+
+<P><B>HOMEWORK:</B> Look up the source code to the standard StateT,
+ReaderT, WriterT, and MaybeT implementations on hackage.  How does your
+code differ from theres?  Why did they design their code the way they
+did?</P>
+
+<P><DIV ALIGN="CENTER"><H2>Monad Laws</H2></DIV></P>
+
+<P>The three monad laws:</P>
+<P><TABLE CELLPADDING=10><TR><TD>1</TD><TD>Left Identity:</TD><TD><CODE>(return x) &gt;&gt;=
+f</CODE></TD><TD>&lt;=&gt;</TD><TD><CODE>f x</CODE></TD></TR>
+
+<TR><TD>2</TD><TD>Right Identity:</TD><TD><CODE>m &gt;&gt;=
+return</CODE></TD><TD>&lt;=&gt;</TD><TD><CODE>m</CODE></TD></TR>
+
+<TR><TD>3</TD><TD>Associativity:</TD><TD><CODE>(m &gt;&gt;= f) &gt;&gt;=
+g</CODE></TD><TD>&lt;=&gt;</TD><TD><CODE>m&gt;&gt;= (\x -&gt; f x
+&gt;&gt;= g)</CODE></TD></TR></TABLE></P>
+
+<P>The english translation:</P>
+
+<P>Rules 1 and 2 mean that the only thing return can do is inject a
+value into the monad, it can not perform any other action.  Rule 3 says
+that the only important thing is the ordering of the bindings.  One can
+always pull subsequences out into their own values or functions.</P>
+
+<P><EM>In other words, the monad laws just mean that the monad
+implementation has to behave sensibly.</EM></P>
+
+<P>The monad laws also only hold in the lack of bottom (expressions that
+throw exceptions, go into infinite loops, exit the program, etc.).
+Every so often a debate emerges on the haskell mailing lists over wether
+the monad laws are actually followed or not.  Rather than participating
+in such debates, I recommend reading <A
+HREF="http://www.cs.ox.ac.uk/jeremy.gibbons/publications/fast+loose.pdf">Fast
+and Loose Reasoning is Morally Correct</A>, by Danielsson, Hughes,
+Jansso, and Gibbons.  Or, better yet, going outside to get some fresh
+air and sunshine.</P>
+
+<P><B>HOMEWORK:</B> If you really insist, prove that this implementation
+of <CODE>return</CODE> for the List monad is incorrect:</P>
+
+<P><CODE><PRE>
+    return x = [ x, x ]
+</PRE></CODE></P>
+
+<P><B>HOMEWORK:</B> If you really enjoy this sort of thing, go back and
+prove all of our implementations up until this point do, in fact, follow
+the monad laws.</P>
+
+<P><DIV ALIGN="CENTER"><H2>Designing with Monads</H2></DIV></P>
+
+<P>In terms of design, a monad is:
+<UL><LI>An action</LI>
+<LI>Returning a value</LI>
+<LI>In a domain that has special abilities</LI></UL></P>
+
+<P>There are the operations all monads support (<CODE>&gt;&gt;=</CODE>,
+<CODE>return</CODE>), and operations only supported by specific monads
+(<CODE>get</CODE>, <CODE>put</CODE>, <CODE>putStrLn</CODE>, etc.).  The
+"special abilities" of the monad are in these specific operations.</P>
+
+<P><TABLE BORDER=1 CELLPADDING=5>
+<TR><TD>Monad</TD><TD>Special abilities</TD></TR>
+<TR><TD>IO</TD><TD>Can do I/O and/or side-effects</TD></TR>
+<TR><TD>State</TD><TD>Has read/write access to a "global variable"</TD></TR>
+<TR><TD>Reader</TD><TD>Has read-only access to a "global variable"</TD></TR>
+<TR><TD>Writer</TD><TD>Has write-only access to a "global variable"</TD></TR>
+<TR><TD>Maybe</TD><TD>May not produce an output</TD></TR>
+<TR><TD>List</TD><TD>May produce multiple outputs</TD></TR>
+</TABLE></P>
+
+<P>In addition, you can define your own monads, either directly, or
+using one of the standard monads.  For example, you might do:</P>
+
+<P><CODE><PRE>    type WithDBConn a = Reader DB.Conn a</PRE></CODE></P>
+
+<P>To define a monad whose domain is "has a connection to the database".
+This is one of the main ways to structure a Haskell program on the large
+scale- using monads to define the major "domains" of a program (code
+that needs a connection to the database, etc.).</P>
+
+<P><B>HOMEWORK:</B> Think of a program you might want to write.  What
+are the major domains that program will want?  How would you implement
+them?</P>
+
+<P><DIV ALIGN="CENTER"><H2>The last bit of homework</H2></DIV></P>
+
+<P><B>HOMEWORK:</B> Go write Haskell code using monads!</P>
+
+<P><DIV ALIGN="CENTER"><H1>FINI</H1></DIV></P>
 
 </BODY>
