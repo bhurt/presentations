@@ -1,0 +1,1129 @@
+\documentclass{beamer}
+
+\usetheme{default}
+
+\title{Introduction to Type Inference}
+\author{Brian Hurt}
+\date{22 April 2015}
+
+\begin{document}
+
+\begin{frame}
+    \titlepage
+\end{frame}
+
+\begin{frame}
+\begin{center}
+\Large{
+Source for this presentation (latex + beamer):
+
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Why you care}
+\begin{itemize}
+\item Forms the basis for most static type systems (Haskell, Ocaml, Scala, Swift, etc.)
+\item Increasingly used in optional type systems (Typed Racket, Clojure's
+core.typed, C++'s auto, static analysis tools like Coverity, etc.)
+\item The basis for more advanced type system features
+\item Helps in understanding otherwise cryptic error messages
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}
+\frametitle{What this talk does}
+\begin{itemize}
+\item Introduces a simple subset of Haskell called SiML
+\item Creates a type inference/type checking algorithm for it
+\item Concurrently introduces the notation used by the research (the
+``Natural Deduction Style'')
+\end{itemize}
+
+This code is not how GHC really works, however...
+\end{frame}
+
+\begin{frame}
+\frametitle{Technobabble}
+\begin{center}
+SiML is an enriched lambda caculus on which we perform a modified and
+simplified Hindley-Milner-Damas algorithm.
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{The SiML Language}
+{\tt \Large{
+\begin{verbatim}
+    data Expr a =
+        Const Const
+        | Var Var
+        | If (Expr a) (Expr a) (Expr a)
+        | Apply (Expr a) (Expr a)
+        | Lambda Var (Expr a)
+        | Let Var (Expr a) (Expr a)
+        | LetRec [ (Var, (Expr a)) ]
+                (Expr a)
+        | Typed (Expr a) (Type a)
+        deriving (Read, Show, Eq, Ord)
+\end{verbatim}
+}}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\frametitle{The SiML Language}
+{\tt \Large{
+\begin{verbatim}
+    instance Functor Expr where ...
+
+    instance Foldable Expr where ...
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{The SiML Language}
+{\tt \Large{
+\begin{verbatim}
+    type Var = String
+
+    data Const =
+        ConstInt Integer
+        | ConstBool Bool
+        deriving (Read, Show, Eq, Ord)
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{The SiML Language}
+{\tt \Large{
+\begin{verbatim}
+    data Type a =
+        TBool
+        | TInt
+        | TFun Type Type
+        | TVar a
+        deriving (Read, Show, Eq, Ord)
+
+    instance Functor Type where ...
+
+    instance Foldable Type where ...
+
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{The SiML Language}
+{\tt\Large{
+\begin{verbatim}
+    data Stmnt =
+        LetStmnt Var Expr
+        | LetRecStmnt [ (Var, Expr) ]
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}
+\frametitle{Basic Intuition}
+\begin{center}
+\huge{
+The basic intuition:
+
+\vspace{20pt}
+The structure of the code itself imposes constraints on the types.
+
+\vspace{20pt}
+We can use these constraints to determine the type.
+}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Basic Intuition}
+\begin{center}
+\huge{
+For example, given:
+
+$$\text{if}\hspace{5pt}e_1\hspace{5pt}\text{then}\hspace{5pt}e_2
+\hspace{5pt}\text{else}\hspace{5pt}e_3$$
+
+Where:
+$$e_1:t_1\qquad{}e_2:t_2\qquad{}e_3:t_3$$}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Basic Intuition}
+\begin{center}
+\huge{
+Then we know that:
+
+$$t_1 = Bool$$
+
+$$t_2 = t_3 = \text{type of the if statement}$$}
+\end{center}
+\end{frame}
+
+
+\begin{frame}
+\frametitle{Natural Deduction Style}
+\begin{center}
+\huge{
+The ``natural deduction style'' of logical systems.
+}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Natural Deduction Style}
+\Huge{
+$$\frac{\Gamma,x:t_1\dashv{}e:t_2}{\Gamma\dashv{}\lambda{}x.e:t_1\rightarrow{}t_2}$$
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Natural Deduction Style}
+\begin{center}
+\Huge{
+Don't Panic
+}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Natural Deduction Style}
+\huge{
+$$\frac{\text{If this is true}}{\text{Then this is true}}$$
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Natural Deduction Style}
+\Large{
+$$\frac{e_1:t_1\quad{}e_2:t_2\quad{}e_3:t_3\quad{}t_1 = \text{Bool}\quad{}t_2 = t\quad{}t_3 = t}{
+(\text{if}\hspace{5pt}e_1\hspace{5pt}\text{then}\hspace{5pt}e_2
+\hspace{5pt}\text{else}\hspace{5pt}e_3):t}$$
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Unification}
+\begin{center}
+\Huge{
+What is meant by:
+
+$$t_1 = t_2$$
+}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Unification}
+\begin{center}
+\Huge{
+The mathematician means:
+
+\vspace{40pt}
+
+You can replace all occurrences of $t_1$ with $t_2$.
+}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Unification}
+\Large{
+So you can replace $t_1$ with Bool, and $t_2$ and $t_3$ with $t$:
+
+$$\frac{e_1:\text{Bool}\qquad{}e_2:t\qquad{}e_3:t}{
+(\text{if}\hspace{5pt}e_1\hspace{5pt}\text{then}\hspace{5pt}e_2
+\hspace{5pt}\text{else}\hspace{5pt}e_3):t}$$
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Unification}
+\begin{center}
+\Huge{
+The programmer means:
+
+\vspace{40pt}
+
+Change the state of the system so that $t_1 = t_2$.
+}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Unification}
+
+{\tt\large{
+\begin{verbatim}
+    type Matching a = ...
+
+    instance Monad Matching where
+        ...
+
+    unify :: Type Var -> Type Var
+             -> Matching (Type Var)
+    unify = undefined
+\end{verbatim}
+
+So $t_1 = t_2$ becomes {\tt unify t1 t2}.
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Inference: If }
+
+{\tt\large{
+\begin{verbatim}
+    typeInfer :: Expr Var
+                    -> Matching (Type Var)
+
+    typeInfer (If e1 e2 e3) = do
+        t1 <- typeInfer e1
+        t2 <- typeInfer e2
+        t3 <- typeInfer e3
+        _ <- unify t1 TBool
+        unify t2 t3
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Inference: Constants}
+\Large{
+Integer and boolean constants have their obvious types.
+
+$$\frac{}{\text{True}:\text{Bool}\qquad{}\text{False}:\text{Bool}}$$
+
+\vspace{40pt}
+
+$$\frac{}{0:\text{Int}\quad{}1:\text{Int}\quad{}...}$$
+}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Inference: Constants}
+
+{\tt\large{
+\begin{verbatim}
+    typeInfer (Const (ConstInt _)) =
+        return TInt
+    typeInfer (Const (ConstBool _)) =
+        return TBool
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Inference: Constants}
+\Large{
+Type application is also obvious:
+
+$$\frac{f:t_1 \rightarrow{} t_2\qquad{}x:t_1}{(f\hspace{5pt}x):t_2}$$
+}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Inference: Application}
+
+\Large{
+{\tt
+\begin{verbatim}
+    typeInfer (Apply f x) = do
+        tf <- typeInfer f
+        tx <- typeInfer x
+        case tf of
+            TFun t1 t2 -> do
+                _ <- unify t1 tx
+                return t2
+            _ -> fail "Not a function!"
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Inference: Typed Expressions}
+\Large{
+
+Typed expressions are also obvious:
+
+$$\frac{x:t}{(x\hspace{5pt}::\hspace{5pt}t):t}$$
+}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Inference: Typed Expressions}
+
+\Large{
+{\tt
+\begin{verbatim}
+    typeInfer (Typed x t) = do
+        tx <- typeInfer x
+        unify tx t
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Inference: Var and Let}
+
+Consider...
+
+{\tt\large{
+\begin{verbatim}
+    typeInfer (Var x) = ...
+    typeInfer (Let x e1 e2) = ...
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Inference: Var and Let}
+\begin{center}
+\Large{
+We need to pass around a map of variables to their types.
+}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Inference: Var and Let}
+
+{\tt\large{
+\begin{verbatim}
+    typeInfer :: [ (Var, Type Var) ]
+                    -> Expr Var
+                    -> Matching (Type Var)
+
+    typeInfer ctx (Var x) = 
+        case (lookup x ctx) of
+            Just t -> return t
+            Nothing -> fail "Unknown variable"
+
+    typeInfer ctx (Let x e1 e2) = do
+        t1 <- typeInfer ctx e1
+        typeInfer ((x, t1) : ctx) e2
+\end{verbatim}
+}}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\frametitle{Type Inference: If and Constants (v2.0)}
+
+{\tt\large{
+\begin{verbatim}
+    typeInfer ctx (If e1 e2 e3) = do
+        t1 <- typeInfer ctx e1
+        t2 <- typeInfer ctx e2
+        t3 <- typeInfer ctx e3
+        _ <- unify t1 TBool
+        unify t2 t3
+    typeInfer _ (Const (ConstInt _)) =
+        return TInt
+    typeInfer _ (Const (ConstBool _)) =
+        return TBool
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}
+\frametitle{Natural Deduction Style: Contexts}
+We use $\Gamma$ to represent our context, and $\dashv$ to mean ``evaluate
+the right hand side with the context on the left'':
+
+\LARGE{
+$$\frac{\Gamma\dashv{}e_1:Bool\qquad\Gamma\dashv{}e_2:t\qquad\Gamma\dashv{}e_3:t}{\Gamma\dashv{}(\text{if}\hspace{5pt}e_1\hspace{5pt}\text{then}\hspace{5pt}e_2
+\hspace{5pt}\text{else}\hspace{5pt}e_3):t}$$
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Natural Deduction Style: Contexts}
+\LARGE{
+$$\frac{x:t \in{} \Gamma}{\Gamma{}\dashv{}x:t}$$
+
+\vspace{20pt}
+
+$$\frac{\Gamma\dashv{}e_1:t_1\qquad{}\Gamma{},x:t_1\dashv{}e_2:t_2}{\Gamma\dashv{}(\text{let}\hspace{5pt}x=e_1\hspace{5pt}\text{in}\hspace{5pt}e2):t_2}$$
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Inference: Lambda}
+\begin{center}
+\Large{
+This works great for let (where we know the value being bound, and therefor
+the type).
+
+\vspace{20pt}
+
+But what about lambda?}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Inference: Lambda}
+\Large{
+We need to know the type of the argument before we can infer the
+type of the body- except it's how the argument is used which
+determines it's type!  For example:
+
+\tt
+\begin{verbatim}
+    (\x -> x + 1)
+\end{verbatim}
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Inference: Lambda}
+
+\Large{
+With math, we can just assume it exists:
+
+$$\frac{\Gamma,x:t_1\dashv{}e:t_2}{\Gamma\dashv{}(\lambda{}x.e):t_1 \rightarrow{} t_2}$$
+
+\vspace{20pt}
+
+With code, we can't pull this stunt.
+}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Inference: Lambda}
+
+{\tt\Large{
+\begin{verbatim}
+    typeInfer ctx (Lambda x e) = do
+        t1 <- what goes here?
+        t2 <- typeInfer ((x, t1) : ctx) e
+        return (TFun t1 t2)
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Inference: Lambda}
+By the way, does this expression look familiar?
+
+{\Huge
+$$\frac{\Gamma,x:t_1\dashv{}e:t_2}{\Gamma\dashv{}\lambda{}x.e:t_1\rightarrow{}t_2}$$
+}
+
+\vspace{40pt}
+
+(hint: Don't Panic)
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Variables}
+\begin{center}
+\Huge{
+The Two Types of
+
+Type Variables
+}
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Variables: Universal}
+\Large{
+\begin{definition}
+A \alert{universal} type variable can be any type.
+
+Also known as: rigid type variables, skolem type variables.
+\end{definition}
+}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Variables: Universal}
+\Large{
+\begin{center}
+Universal type variables are the ``normal'' type variables:
+\end{center}
+
+{\tt
+\begin{verbatim}
+    map :: (a -> b) -> [a] -> [b]
+\end{verbatim}
+}
+
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Variables: Existential}
+\Large{
+\begin{definition}
+A \alert{existential} type variable represents a specific type that is
+not yet known.  The type is known when the type variable is unified with
+some other type.
+
+Also known as: flexible type variables.
+
+\end{definition}
+}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Variables: Universal}
+\large{
+\begin{center}
+You don't see existential type variables in Haskell, but other languages
+do display them:
+\end{center}
+
+{\tt
+\begin{verbatim}
+> ocaml
+        OCaml version 4.01.0
+
+# let r = ref None;;
+val r : '_a option ref = {contents = None}
+# r := Some 1;;
+- : unit = ()
+# r;;
+- : int option ref = {contents = Some 1}
+# 
+\end{verbatim}
+}
+
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Variables}
+\Large{
+\alert{Universal} type variable: this type could be any type in the
+whole wide \alert{universe}.
+
+\vspace{40pt}
+
+\alert{Existential} type variable: this type \alert{exist}s, but we
+don't know what it is yet.
+}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Inference: Lambda}
+
+\Large{
+\begin{center}
+Existential type variables solve our Lambda problem.
+\end{center}
+
+{\tt
+\begin{verbatim}
+    typeInfer ctx (Lambda x e) = do
+        t1 <- allocExistVar
+        t2 <- typeInfer ((x, t1) : ctx) e
+        return (TFun t1 t2)
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Inference: Lambda}
+
+Of course, this requires some type signature changes:
+
+{\tt
+\begin{verbatim}
+    type EVar = ...
+
+    type TVar = Either Var EVar
+
+    allocExistVar :: Matching (Type TVar)
+    allocExistVar = undefined
+
+    unify :: Type TVar -> Type TVar
+             -> Matching (Type TVar)
+    unify = undefined
+
+    typeInfer :: [ (Var, Type TVar) ]
+                    -> Expr Var
+                    -> Matching TVar
+    ...
+\end{verbatim}
+}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Inference: Lambda}
+
+Existential type variables also solves the problem with let rec:
+
+{\tt
+\begin{verbatim}
+    typeInfer ctx (LetRec defns e) = do
+            ts <- mapM getEVar defns
+            let ctx' = ts ++ ctx
+            mapM_ (inferBody ctx') defns
+            typeInfer ctx' e
+        where
+            getEVar (v, _) = do
+                t <- allocExistVar
+                return (v, t)
+            inferBody c (_, e1) =
+                typeInfer c e1
+\end{verbatim}
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Variables: Two Problems}
+\Huge{
+\begin{center}
+Two Problems
+\end{center}
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Variables: Problem 1: Typed Expressions}
+\Large{
+\begin{center}
+With Typed expressions, the AST gives us {\tt Type Var}, but we
+need {\tt Type TVar} to pass in to unify.
+
+\vspace{40pt}
+
+Note: the types given in the AST can only contain universal type
+variables!
+\end{center}
+}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Variables: Problem 1: Typed Expressions}
+
+\Large{
+Using {\tt fmap Left} converts a {\tt Type Var} into a
+{\tt Type TVar} (making all variables universal):
+
+{\tt
+\begin{verbatim}
+    typeInfer (Typed x t) = do
+        tx <- typeInfer x
+        unify tx (fmap Left t)
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Variables: Problem 2: Using Variables}
+\Large{
+Consider map:
+
+{\tt
+\begin{verbatim}
+    map :: (a -> b) -> [a] -> [b]
+\end{verbatim}
+}
+
+\vspace{20pt}
+
+\alert{Inside} map, {\tt a} and {\tt b} are universal type variables, and
+can not be unified with any other type.
+
+\vspace{20pt}
+
+But when we \alert{call} map, they can be any type we want.
+}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Variables: Problem 2: Using Variables}
+\Large{
+\begin{center}
+When we use a variable whose type has universal type variables, the
+universal type variables need to be converted into existential type
+variables.
+
+\vspace{20pt}
+
+But, all instances of the same universal type variable need to map
+to the same existential type variable.
+\end{center}
+}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Type Variables: Problem 2: Using Variables}
+
+{\tt
+\begin{verbatim}
+    import Data.List(nub)
+    import Data.Foldable(toList)
+    import Data.Maybe(fromJust)
+
+    typeInfer ctx (Var x) =
+        case (lookup x ctx) of
+            Just t -> do
+                let uvars = nub (toList t)
+                evars <- mapM (const allocExistVar)
+                                            uvars
+                let varMap = zip uvars evars
+                return (fmap (fixVar varMap) t)
+            Nothing -> fail "Unknown variable"
+        where
+            fixVar varMap v =
+                fromJust (lookup v varMap)
+\end{verbatim}
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Unify}
+\Huge{
+\begin{center}
+Unify
+\end{center}
+}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\frametitle{Unify}
+
+\Large{\tt
+\begin{verbatim}
+    data Type a =
+        TBool
+        | TInt
+        | TFun Type Type
+        | TVar a
+
+    unify :: Type TVar -> Type TVar
+             -> Matching (Type TVar)
+    unify = undefined
+\end{verbatim}
+}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Unify}
+
+\Large{
+
+The easy cases:
+
+{\tt
+\begin{verbatim}
+    unify TBool TBool = return TBool
+    unify TInt  TInt  = return TInt
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Unify}
+\large{
+\begin{center}
+$$t_1 \rightarrow{} t_2 = t_3 \rightarrow{} t_4$$
+implies:
+$$t_1 = t_3\qquad{}\&\&\qquad{}t_2 = t_4$$
+\end{center}
+
+{\tt
+\begin{verbatim}
+    unify (TFun t1 t2) (TFun t3 t4) = do
+        t5 <- unify t1 t3
+        t6 <- unify t2 t4
+        return (TFun t5 t6)
+\end{verbatim}
+}}
+\end{frame}
+
+
+\begin{frame}[fragile]
+\frametitle{Unify}
+\large{
+\begin{center}
+Two universal type variables only unify if they're the same type
+variable.
+\end{center}
+
+{\tt
+\begin{verbatim}
+    unify (TVar (Left a)) (TVar (Left b))
+        | a == b = return (TVar (Left a))
+        | otherwise = fail "Type error"
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}
+\frametitle{Unify}
+\Large{
+\begin{center}
+Interesting Question:
+
+\vspace{20pt}
+
+What is the scope of a universal type variable?  That is: when does one
+{\tt a} in one type expression match represent the same (polymorphic)
+type as another {\tt a} in some other type expression?
+\end{center}
+}
+\end{frame}
+
+
+\begin{frame}
+\frametitle{Unify: Existential Types}
+\Huge{
+\begin{center}
+Existential Types
+\end{center}
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Unify: Existential Types}
+The rules for unifying existential types are:
+\begin{itemize}
+\item Existential type variables can be assigned another type \alert{at
+most once}.
+\item If an existential type variablehas been assigned another type
+previously, we unify with that type instead.
+\item Otherwise, we assign the other type to the existential type variable.
+\item It is possible for both types to be existential type variables
+which have not been assigned previously, in which case we assign one
+to the other.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Unify: Existential Types}
+\large{
+We need some way to set an existential type variable to a given type:
+{\tt
+\begin{verbatim}
+    setEVar :: EVar -> Type TVar -> Matching ()
+    setEVar = undefined
+\end{verbatim}
+}
+
+And we need a way to get the value it was set to (if it was set
+previously):
+
+{\tt
+\begin{verbatim}
+    getEVar :: EVar -> Matching (Maybe (Type TVar))
+    getEVar = undefined
+\end{verbatim}
+}
+}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Unify: Existential Types}
+\large{
+{\tt
+\begin{verbatim}
+    unify (TVar (Right a)) t2 = do
+        mt1 <- getEVar a
+        case mt1 of
+            Some t1 -> unify t1 t2
+            None -> do
+                setEVar a t2
+                return t2
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Unify: Existential Types}
+\large{
+{\tt
+\begin{verbatim}
+    unify t1 (TVar (Right b)) = do
+        mt2 <- getEVar b
+        case mt2 of
+            Some t2 -> unify t1 t2
+            None -> do
+                setEVar b t1
+                return t1
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Unify: Existential Types}
+\large{
+\begin{center}
+\alert{All} other patterns are type errors!
+\end{center}
+
+{\tt
+\begin{verbatim}
+    unify _ _ = fail "Type error"
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Unify: Matching Utils}
+\large{
+{\tt
+\begin{verbatim}
+    import Data.Default
+
+    type EVar = Int
+
+    data MState = MState {
+        evarCounter :: Int,
+        evarMappings :: [ (EVar, Type TVar) ]
+    }
+
+    type Matching a = State MState a
+
+    instance Default MState where
+        def = MState 0 []
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Unify: Matching Utils}
+\large{
+{\tt
+\begin{verbatim}
+    allocExistVar :: Matching (Type TVar)
+    allocExistVar = do
+        mstate <- get
+        let evar = evarCounter mstate
+        put (mstate { evarCounter = evar + 1 })
+        return (Type (Right evar))
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Unify: Matching Utils}
+\large{
+{\tt
+\begin{verbatim}
+    setEVar :: EVar -> Type TVar -> Matching ()
+    setEVar evar typ = do
+        mstate <- get
+        let mappings =
+            (evar, typ) : evarMappings mstate
+        put (mstate { evarMappings = mappings })
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Unify: Matching Utils}
+\large{
+{\tt
+\begin{verbatim}
+    getEVar :: EVar -> Matching (Maybe (Type TVar))
+    getEVar evar = do
+        mstate <- get
+        let mappings = evarMappings mstate
+        return (lookup evar mappings)
+\end{verbatim}
+}}
+\end{frame}
+
+\begin{frame}
+\frametitle{One Last Problem}
+\begin{center}
+{\Huge
+How do you prevent existential type variables from ``leaking'' into
+a global type?}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{One Last Problem}
+Before a type can be promoted to the global scope:
+\begin{itemize}
+\item If an existential type variable has been assigned another type,
+replace the existential type variable with the assigned type.
+\item If an existential type variable has not been assigned another type,
+generate a new, unique universal type variable and assign it to the
+existential type.
+\end{itemize}
+
+Repeat the above until the type no longer has any existential type variables
+in it.
+\end{frame}
+
+\begin{frame}
+\frametitle{Type Variables: Universal}
+\Large{
+\begin{definition}
+The act of replacing an unassigned existential type variable with a new,
+unique universal type variable is called \alert{Skolemization} (named after
+Thoralf Skolem).
+\end{definition}
+}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Summary}
+\Large{
+We now have  function:
+
+{\tt
+\begin{verbatim}
+    typeInfer :: [ (Var, Type Var) ]
+                    -> Expr Var
+                    -> Matching (Type Var)
+\end{verbatim}
+}
+
+Which can be used for both type inference and type checking.
+
+\vspace{10pt}
+
+Comming soon: working code in my github repo.
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Summary}
+In addition, formula like the following aren't so scary any more:
+
+{\Huge
+$$\frac{\Gamma,x:t_1\dashv{}e:t_2}{\Gamma\dashv{}\lambda{}x.e:t_1\rightarrow{}t_2}$$
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Summary}
+\begin{center}
+Where to go from here:
+
+\vspace{20pt}
+
+``Types and Programming Languages''
+Benjamin C. Pierce
+ 
+\vspace{20pt}
+
+Then start reading papers.
+\end{frame}
+
+\begin{frame}
+\begin{center}
+\Huge{
+fini
+}
+\end{frame}
+
+\end{document}
+
