@@ -1,0 +1,226 @@
+\documentclass{beamer}
+
+\usetheme{default}
+
+\title{The Not-A-Wat in Haskell}
+\author{Brian Hurt}
+\date{18 Oct 2015}
+
+\begin{document}
+
+\begin{frame}
+    \titlepage
+\end{frame}
+
+\begin{frame}
+\begin{center}{\tt \Huge <RANT>}\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Wat Definition}
+\begin{center}\Large{What is a "Wat"?}\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Wat Definition}
+\begin{center}\Large{https://www.destroyallsoftware.com/talks/wat}\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Wat Definition}
+\begin{center}
+My definition:
+
+A "wat" (w.r.t. programming languages) is a behavior that is both
+unexpected, and inconsistent with all the other behaviors of the
+language.
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{The Wat In Question}
+{\tt \Large{
+Prelude> length (1, 2)\\
+1\\
+Prelude> 
+}}
+\end{frame}
+
+\begin{frame}
+\frametitle{Wat Definition}
+\begin{center}
+{\Huge This is not a Wat!}
+
+This behavior is consitent with the rest of the language.
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Working Through the Logic}
+{\Large
+Length gives the number of elements held by a container.
+
+\vspace{20pt}
+
+{\tt
+Prelude> length [ 1, 2, 3 ]\\
+3\\
+Prelude> 
+}
+
+\vspace{20pt}
+
+Length just folds over the container, counting the elements as they go by.
+
+}
+
+
+\end{frame}
+
+\begin{frame}
+\frametitle{Working Through the Logic}
+\begin{center}
+{\Large 
+Can you have a container that can \textsl{not} hold an arbitrary number
+of elements, but can only hold at most one?
+
+\vspace{32pt}
+
+Sure:  Maybe, Either a, etc.
+}
+
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Working Through the Logic}
+{\Large
+{\tt Either String } is your classic "return a value or error message"
+container.  It is:
+\begin{itemize}
+\item a monad
+\item applicative
+\item a functor
+\item \textbf{foldable}
+\end{itemize}
+}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Working Through the Logic}
+{\Large
+Either is a container that holds 0 or 1 elements, and acts like it:
+
+{\tt Prelude> foldr (+) 0 (Left "foo") \\
+0 \\
+Prelude> foldr (+) 0 (Right 2) \\
+2 \\
+Prelude> fmap show (Right 3) \\
+Right "3" \\
+Prelude> \\
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Working Through the Logic}
+{\Large
+It is foldable, there for length is defined on it:
+
+\vspace{32pt}
+
+{\tt
+Prelude> :t length \\
+length :: Foldable t => t a -> Int \\
+Prelude> length (Left "error message") \\
+0 \\
+Prelude> length (Right 1) \\
+1 \\
+Prelude> 
+}}
+\end{frame}
+
+\begin{frame}
+\frametitle{Important Concept}
+\begin{center}
+\textbf{\Huge Tuples}
+
+\vspace{20pt}
+
+\textbf{\Huge Are}
+
+\vspace{20pt}
+
+\textbf{\Huge Not}
+
+\vspace{20pt}
+
+\textbf{\Huge Lists}
+
+\end{center}
+\end{frame}
+
+\begin{frame}
+\frametitle{Important Concept}
+{\Large
+\begin{itemize}
+\item {\tt (,)} is a type, \textbf{just like Either}
+\item {\tt (,)} takes two type parameters, \textbf{just like Either}
+\item {\tt (,)} as a type can be partially applied, \textbf{just like Either}
+\end{itemize}
+
+\vspace{20pt}
+
+So, if we apply {\tt (,)} to one type (like we do with Either), what do we get?
+}
+\end{frame}
+
+\begin{frame}
+\frametitle{Important Concept}
+\begin{center}
+{\Large
+We get a container that holds exactly one value, as the second value of the tuple.
+}
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Tuples are a Container}
+{\Large
+{\tt
+Prelude> foldr (+) 0 (1, 2) \\
+2 \\
+Prelude> foldr (+) 0 ("foo", 2) \\
+2 \\
+Prelude> fmap show (1, 2) \\
+(1,"2") \\
+Prelude> fmap show (False, 2) \\
+(False,"2") \\
+Prelude> length (False, 2) \\
+1 \\
+Prelude>  \\
+}}
+\end{frame}
+
+\begin{frame}
+\frametitle{Tuples are a Container}
+\begin{center}
+What value did you expect {\tt length} to return?
+
+\vspace{32pt}
+
+nil?
+
+\vspace{32pt}
+
+NaN?
+\end{center}
+\end{frame}
+\begin{frame}
+\begin{center}\tt \Huge{</RANT>}\end{center}
+\end{frame}
+
+
+\end{document}
+
+
+
