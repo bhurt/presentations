@@ -41,6 +41,13 @@ language.
 \frametitle{The Wat In Question}
 {\tt \Large{
 Prelude> length (1, 2)\\
+}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{The Wat In Question}
+{\tt \Large{
+Prelude> length (1, 2)\\
 1\\
 Prelude> 
 }}
@@ -71,10 +78,7 @@ Prelude>
 \vspace{20pt}
 
 Length just folds over the container, counting the elements as they go by.
-
 }
-
-
 \end{frame}
 
 \begin{frame}
@@ -83,33 +87,36 @@ Length just folds over the container, counting the elements as they go by.
 {\Large 
 Can you have a container that can \textsl{not} hold an arbitrary number
 of elements, but can only hold at most one?
-
-\vspace{32pt}
-
-Sure:  Maybe, Either a, etc.
 }
-
 \end{center}
-\end{frame}
-
-\begin{frame}
-\frametitle{Working Through the Logic}
-{\Large
-{\tt Either String } is your classic "return a value or error message"
-container.  It is:
-\begin{itemize}
-\item a monad
-\item applicative
-\item a functor
-\item \textbf{foldable}
-\end{itemize}
-}
 \end{frame}
 
 \begin{frame}[fragile]
 \frametitle{Working Through the Logic}
 {\Large
-Either is a container that holds 0 or 1 elements, and acts like it:
+{\tt Maybe} works as a "at most one" container:
+
+\vspace{20pt}
+
+{\tt
+Prelude> length Nothing\\
+0\\
+Prelude> length (Just "foo")\\
+1\\
+Prelude> fmap show Nothing\\
+Nothing\\
+Prelude> fmap show (Just 1)\\
+Just "1"\\
+}}
+\end{frame}
+
+
+\begin{frame}
+\frametitle{Working Through the Logic}
+{\Large
+You can partially apply multi-param types just like functions.
+
+So {\tt Either String } works as a "at most one" container:
 
 {\tt Prelude> foldr (+) 0 (Left "foo") \\
 0 \\
